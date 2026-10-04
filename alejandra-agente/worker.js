@@ -28,6 +28,11 @@ const MODEL_EXPERTO = 'claude-sonnet-4-6';
 import {
   reEspanol,
   CONTEXTO_DOMINIO_INSTALADORA,
+  REGLA_DATOS_OBLIGATORIOS,
+  validarCuandoRecordatorio,
+  validarUnidadesCalculoCable,
+  tokensPersonaMencionados,
+  mensajeAmbiguedadPersona,
   SYSTEM_CLASIFICADOR_INTENCION,
   ETIQUETAS_CLASIFICADOR_INTENCION,
   alcancePlanoGenerado,
@@ -222,7 +227,8 @@ actual no lo necesitaba; si de verdad se trata de una consulta PRL que no se det
 INFORMES Y COMUNICACIONES: Dispones de tres herramientas de comunicación: generar_informe (crea un informe HTML profesional con datos reales de la BD, lo guarda en R2 y devuelve la clave), enviar_email (envía por correo usando Resend, puede adjuntar el informe), enviar_telegram_informe (manda el informe al grupo de Telegram como documento). Úsalas cuando el usuario pida informes, resúmenes, o comunicaciones formales.`,
 
   // POOL-GLOSARIO-01: contexto del oficio + glosario (lib.js). En L0 (cacheado) y en todos los expertos.
-  dominio: CONTEXTO_DOMINIO_INSTALADORA,
+  // POOL-DATOS-FALTANTES-01: regla breve de «pregunta antes de suponer» (lib.js), fija.
+  dominio: CONTEXTO_DOMINIO_INSTALADORA + '\n\n' + REGLA_DATOS_OBLIGATORIOS,
 
   app: `APP ALEJANDRA: gestiona bobinas de cable, equipos (PEMP, carretillas), personal, fichajes, documentos, incidencias, pedidos y módulo PRL completo — sector eléctrico/mecánico, multi-empresa.
 Roles: operario (lectura) · encargado (su depto) · empresa_admin (su empresa) · superadmin (todo) · desarrollador (solo Adrián).
@@ -1800,7 +1806,9 @@ const TOOL_BUSCAR_WEB = {
 
 const TOOL_MEMORY_SAVE = {
   name: 'memory_save',
-  description: 'Guarda un aprendizaje, mejora propuesta, problema real o contexto importante en tu memoria persistente (el "buzón" que Adrián revisa después). Con tipo=\'error\' e importancia 4 o 5 (un problema real que bloquea a un usuario ahora mismo: tool que falla, permiso que falta, dato roto) avisa además a Adrián por Telegram casi en tiempo real. Con importancia 1-3, o cualquier otro tipo, solo queda archivado para revisar más tarde. MEMORIA-ENLAZADA-01: usa enlaces_a con los slugs de notas relacionadas que ya conozcas (te los devuelve memory_read) para conectar este recuerdo con otros — así una consulta futura sobre uno encuentra el otro aunque no compartan texto.',
+  // POOL-TOOLS-CONFUSAS-01 (04/10/2026): tools-21 del banco — «Recuerda que la nave cierra a
+  // las 15:00 los viernes» acabó en un saludo sin guardar nada. Cuándo usarla, primero.
+  description: 'Úsala cuando el usuario te pida recordar un dato o preferencia: «recuerda que…», «que no se te olvide…», «ten en cuenta que…», «apúntate que…» (tipo=\'contexto\'). Un aviso con hora («recuérdame mañana a las 9…») es programar_recordatorio; un hecho de obra («apunta que Mario ha faltado») va a la base de datos, no aquí. Guarda un aprendizaje, mejora propuesta, problema real o contexto importante en tu memoria persistente (el "buzón" que Adrián revisa después). Con tipo=\'error\' e importancia 4 o 5 (un problema real que bloquea a un usuario ahora mismo: tool que falla, permiso que falta, dato roto) avisa además a Adrián por Telegram casi en tiempo real. Con importancia 1-3, o cualquier otro tipo, solo queda archivado para revisar más tarde. MEMORIA-ENLAZADA-01: usa enlaces_a con los slugs de notas relacionadas que ya conozcas (te los devuelve memory_read) para conectar este recuerdo con otros — así una consulta futura sobre uno encuentra el otro aunque no compartan texto.',
   input_schema: {
     type: 'object',
     properties: {
@@ -1960,7 +1968,7 @@ const TOOL_CONSULTAR_BD = {
 
 const TOOL_CALCULAR_CABLE = {
   name: 'calcular_cable',
-  description: 'Estimación preliminar de sección por intensidad y caída de tensión con las tablas disponibles de cobre XLPE. Expone supuestos y criterios parciales; no certifica cumplimiento normativo. Aluminio usa factor aproximado. Pregunta los datos faltantes y no inventes límites admisibles.',
+  description: 'Estimación preliminar de sección por intensidad y caída de tensión con las tablas disponibles de cobre XLPE. Expone supuestos y criterios parciales; no certifica cumplimiento normativo. Aluminio usa factor aproximado. Pregunta los datos faltantes y no inventes límites admisibles. Potencia y longitud deben venir del usuario con su unidad: si falta («una línea de 40»), pregunta antes de calcular.',
   input_schema: {
     type: 'object',
     properties: {
@@ -2599,7 +2607,7 @@ const TOOL_ESTADO_OBRA = {
 // patrón de nombre (ver marcar_plano más abajo, que pese al nombre es N0).
 const TOOL_GESTIONAR_TAREA = {
   name: 'gestionar_tarea',
-  description: 'CAMPOS OBLIGATORIOS POR ACCIÓN (ALEJANDRA-CONTROLFLOW-03): accion="crear" exige titulo. accion="actualizar"/"completar"/"eliminar" exige tarea_id. Si no los tienes, pregúntalos antes de llamar. Crea, actualiza o lista tareas de obra (tipo Fieldwire). Cada tarea tiene título, estado (pendiente/en_curso/completada/bloqueada), prioridad (urgente/alta/normal/baja), responsable, fecha límite y ubicación. Úsalo cuando el usuario quiera crear una tarea, asignar trabajo, ver qué está pendiente, o marcar algo como completado. NO dibuja diagramas: un diagrama de Gantt, cronograma o planning visual de fases es generar_plano con tipo="gantt".',
+  description: 'CAMPOS OBLIGATORIOS POR ACCIÓN (ALEJANDRA-CONTROLFLOW-03): accion="crear" exige titulo. accion="actualizar"/"completar"/"eliminar" exige tarea_id. Si no los tienes, pregúntalos antes de llamar. Crea, actualiza o lista tareas de obra (tipo Fieldwire). Cada tarea tiene título, estado (pendiente/en_curso/completada/bloqueada), prioridad (urgente/alta/normal/baja), responsable, fecha límite y ubicación. Úsalo cuando el usuario quiera crear una tarea, asignar trabajo, ver qué está pendiente, o marcar algo como completado. Solo tareas de trabajo: una incidencia, avería o fuga se registra con escribir_bd (INSERT INTO incidencias) y una falta o ausencia de un operario es una fila de fichajes, no una tarea. NO dibuja diagramas: un diagrama de Gantt, cronograma o planning visual de fases es generar_plano con tipo="gantt".',
   input_schema: {
     type: 'object',
     properties: {
@@ -2837,7 +2845,7 @@ const TOOL_PROGRAMAR_CORREO = {
 // va en los catálogos generales, no en AYUDANTES.correos.
 const TOOL_PROGRAMAR_RECORDATORIO = {
   name: 'programar_recordatorio',
-  description: 'Programa un recordatorio/alarma para el propio usuario en una fecha/hora futura exacta -- le llega por notificación push y/o Telegram (los que tenga vinculados en ese momento). Usa la fecha/hora actual real del contexto del sistema para calcular fecha_hora a partir de expresiones relativas.',
+  description: 'Programa un recordatorio/alarma para el propio usuario en una fecha/hora futura exacta -- le llega por notificación push y/o Telegram (los que tenga vinculados en ese momento). Usa la fecha/hora actual real del contexto del sistema para calcular fecha_hora a partir de expresiones relativas. Si el usuario no ha dicho cuándo (día u hora), pregúntaselo antes de llamar: no pongas una hora por defecto.',
   input_schema: {
     type: 'object',
     properties: {
@@ -2911,7 +2919,7 @@ const AYUDANTES = {
 
 const TOOL_DELEGAR_TAREA = {
   name: 'delegar_tarea',
-  description: `Delega una tarea concreta en un ayudante especializado (un sub-agente con su propio system prompt y un subconjunto acotado de tools). Úsalo cuando lo que pide el usuario encaja mejor en un flujo de trabajo dedicado que resolverlo tú directamente. Ayudantes disponibles: ${Object.keys(AYUDANTES).join(', ')} (pedidos: gestiona pedidos de material de obra; correos: lee/resume y envía correo desde el Gmail conectado del usuario). El ayudante nunca salta las barreras de confirmación humana ni el Motor de Decisión.`,
+  description: `Delega una tarea concreta en un ayudante especializado (un sub-agente con su propio system prompt y un subconjunto acotado de tools). Úsalo cuando lo que pide el usuario encaja mejor en un flujo de trabajo dedicado que resolverlo tú directamente. Ayudantes disponibles: ${Object.keys(AYUDANTES).join(', ')} (pedidos: crea y gestiona pedidos de material de obra, p. ej. «pide 20 tramos de bandeja»; correos: lee/resume y envía correo desde el Gmail conectado del usuario — para enviar hace falta destinatario y qué decir: si falta el contenido, pregúntalo antes de delegar). El ayudante nunca salta las barreras de confirmación humana ni el Motor de Decisión.`,
   input_schema: {
     type: 'object',
     properties: {
@@ -3138,7 +3146,7 @@ const TOOL_RECUPERAR_CONVERSACION = {
 // humana explicita en el momento"). cron:'prohibido' (TOOLS_PROHIBIDAS_CRON).
 const TOOL_ESCRIBIR_BD = {
   name: 'escribir_bd',
-  description: 'Ejecuta operaciones de escritura en la base de datos (INSERT, UPDATE, DELETE). Usa con responsabilidad — los cambios son permanentes. IMPORTANTE: Siempre usa validar_cambios_bd DESPUÉS de esta operación para confirmar que el cambio se guardó.',
+  description: 'Ejecuta operaciones de escritura en la base de datos (INSERT, UPDATE, DELETE). Úsala para registrar incidencias (INSERT INTO incidencias) y faltas/ausencias (fichajes) cuando no haya una herramienta específica. Usa con responsabilidad — los cambios son permanentes. IMPORTANTE: Siempre usa validar_cambios_bd DESPUÉS de esta operación para confirmar que el cambio se guardó.',
   input_schema: {
     type: 'object',
     properties: {
@@ -3698,7 +3706,9 @@ const TOOL_CONSULTAR_PERSONAL = {
 // ADR-0002 -- ver el comentario junto a runDDL() más arriba para el detalle completo).
 const TOOL_CONSULTAR_INVENTARIO = {
   name: 'consultar_inventario',
-  description: 'Busca materiales en el inventario por nombre, tipo o referencia. Devuelve cantidad disponible, precio y ubicación.',
+  // POOL-TOOLS-CONFUSAS-01 (04/10/2026): tools-06 (bobinas) y tools-11 («pide…») del banco
+  // agrupado acabaron aquí. Esta tool solo lee materiales_obra.
+  description: 'Busca material del almacén/obra (tabla materiales_obra) por nombre, tipo o referencia: cantidad, precio y ubicación. Solo consulta. NO cubre bobinas de cable (para bobinas y sus metros usa consultar_bd sobre la tabla bobinas) ni sirve para pedir material (para «pide…/encarga…» usa delegar_tarea con ayudante=\'pedidos\').',
   input_schema: {
     type: 'object',
     properties: {
@@ -8679,6 +8689,30 @@ function fechaMadridAUTC(fechaHoraStr) {
 // indirecta vía el historial de chat que se le pasa como contexto al modelo.
 // Ahora el default es fail-closed (false); ejecutarReflexion() además pasa
 // los valores explícitos para dejar la intención clara en el código.
+// POOL-DATOS-FALTANTES-01 (04/10/2026): ¿el nombre que ha puesto el modelo (asignado_a) lo dijo
+// el humano solo en parte y hay varias personas activas de la empresa que encajan? Devuelve el
+// mensaje de ambigüedad para el modelo o null. Fail-open: sin empresa, sin texto humano o si la
+// consulta falla, no bloquea (la regla del prompt sigue pidiendo preguntar).
+async function ambiguedadPersonaAsignada(env, eid, nombre, fuentesHumanas) {
+  try {
+    if (!eid || !env.DB || typeof nombre !== 'string') return null;
+    const { completo, tokens } = tokensPersonaMencionados(nombre, fuentesHumanas);
+    if (!tokens.length) return null;
+    let sql = `SELECT nombre, apellidos FROM personal WHERE empresa_id=? AND activo=1`;
+    const params = [eid];
+    for (const t of tokens) { sql += ` AND (' ' || LOWER(COALESCE(nombre,'')) || ' ' || LOWER(COALESCE(apellidos,'')) || ' ') LIKE ?`; params.push(`% ${t} %`); }
+    const r = await env.DB.prepare(sql + ' LIMIT 10').bind(...params).all();
+    const filas = (r && r.results) || [];
+    if (filas.length <= 1) return null;
+    // El humano dijo el nombre entero y hay una persona que se llama exactamente así: vale.
+    const plegar = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+    if (completo && filas.some(f => plegar(`${f.nombre || ''} ${f.apellidos || ''}`) === plegar(nombre))) return null;
+    return mensajeAmbiguedadPersona(tokens.join(' '), filas);
+  } catch (_) {
+    return null;
+  }
+}
+
 async function ejecutarTool(env, nombre, input, usuario_id, empresa_id, expertoTools, sendSSE, authOk = false, esDevVerificado = false, codigosConfirmados = new Set(), codigosConfirmadosEnvio = new Set(), departamento = null, rol = null, fuentesPlano = []) {
   // Normaliza un posible empresa_id a entero positivo o null. Necesario porque
   // el 'empresa_id' de contexto puede llegar como el string literal 'default'
@@ -9278,7 +9312,11 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
           `   📧 ${r.email || '—'} | 📱 ${r.telefono || '—'}\n` +
           `   Estado: ${r.activo ? '✓ Activo' : '✗ Inactivo'}`
         );
-        return `Encontrados ${rows.length} registros de personal:\n\n${items.join('\n\n')}`;
+        // POOL-DATOS-FALTANTES-01: con varias coincidencias el modelo elegía una (multi-10).
+        const avisoVarias = rows.length > 1
+          ? `\n\n⚠️ Hay ${rows.length} personas que coinciden con «${input.query}». Si el usuario se refiere a una sola y no está claro cuál, pregúntale a cuál antes de registrar nada a su nombre.`
+          : '';
+        return `Encontrados ${rows.length} registros de personal:\n\n${items.join('\n\n')}${avisoVarias}`;
       } catch (err) {
         return `Error consultando personal: ${err.message}`;
       }
@@ -10173,8 +10211,12 @@ ${input.codigo_sugerido ? `CÓDIGO SUGERIDO:\n${input.codigo_sugerido}` : ''}`;
       return `Error: sub-handler no encontrado para ${nombre}`;
     }
 
-    case 'calcular_cable':
+    case 'calcular_cable': {
+      // POOL-DATOS-FALTANTES-01: potencia/longitud sin unidad en el texto humano → preguntar.
+      const sinUnidad = validarUnidadesCalculoCable(input, fuentesPlano);
+      if (sinUnidad) return sinUnidad;
       return calcularCable(input);
+    }
 
     case 'calcular_bandeja':
       return calcularBandeja(input);
@@ -11076,6 +11118,13 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
           return txt;
         }
 
+        // POOL-DATOS-FALTANTES-01: si el humano solo dijo parte del nombre («Mario») y encaja
+        // con varias personas activas, no se asigna a una elegida por el modelo.
+        if ((accion === 'crear' || accion === 'actualizar') && input.asignado_a) {
+          const ambigua = await ambiguedadPersonaAsignada(env, resolverEid(empresa_id), input.asignado_a, fuentesPlano);
+          if (ambigua) return ambigua;
+        }
+
         if (accion === 'crear') {
           if (!input.titulo) return '❌ El título es obligatorio para crear una tarea.';
           // Ensure table exists
@@ -11636,6 +11685,9 @@ ${descripcion ? `<div class="info-bar"><span class="badge">${tipo}</span>${descr
         const mensaje = String(input.mensaje || '').trim();
         const fechaHoraStr = String(input.fecha_hora || '').trim();
         if (!titulo || !mensaje) return '❌ Faltan "titulo" o "mensaje".';
+        // POOL-DATOS-FALTANTES-01: el modelo inventaba la hora (10:00) si el usuario no la daba.
+        const sinCuando = validarCuandoRecordatorio(fuentesPlano);
+        if (sinCuando) return sinCuando;
         const fechaUTC = fechaMadridAUTC(fechaHoraStr);
         if (!fechaUTC) return '❌ fecha_hora debe tener el formato "YYYY-MM-DD HH:MM" (hora de España).';
         if (fechaUTC.getTime() <= Date.now()) return '❌ fecha_hora debe ser una fecha/hora futura.';

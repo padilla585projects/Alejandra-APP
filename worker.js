@@ -16,7 +16,7 @@ import DxfParser from 'dxf-parser';
 // Validacion sintactica de planos; no declara correccion geometrica ni normativa.
 import { SaxesParser } from 'saxes';
 // Una sola regla pura de IDs CAD para API y agente; sin I/O ni datos de sesión.
-import { normalizarIdPlano, debeRegistrarTrazaToken, CONTEXTO_DOMINIO_INSTALADORA } from './alejandra-agente/lib.js';
+import { normalizarIdPlano, debeRegistrarTrazaToken, CONTEXTO_DOMINIO_INSTALADORA, REGLA_DATOS_OBLIGATORIOS } from './alejandra-agente/lib.js';
 // ADR-0028: pool de IA propio con respaldo obligatorio. MISMO módulo que usa
 // alejandra-agente (regla «dos cerebros»). Sin el secreto AI_POOL_KEY no hace ninguna llamada.
 import { poolRouterNexus, poolBuscar, poolConfigurado, prepararConsultaBusqueda, fijarSumideroMetricasPool } from './alejandra-agente/ai-pool.js';
@@ -1173,7 +1173,7 @@ const AI_TOOLS = [
   },
   {
     name: 'memory_save',
-    description: 'Guarda en tu memoria persistente. USA ESTO MUCHO — es tu forma de aprender y no repetir errores. Guarda: lo que hiciste, lo que aprendiste sobre la app, errores que cometiste, patrones que funcionan, comportamientos que descubriste. MEMORIA-ENLAZADA-01: usa enlaces_a con los slugs de notas relacionadas que ya conozcas (te los devuelve memory_read) para conectar este recuerdo con otros.',
+    description: 'Guarda en tu memoria persistente. Úsala también cuando Adrián te pida recordar algo («recuerda que…», «que no se te olvide…», «ten en cuenta que…»). USA ESTO MUCHO — es tu forma de aprender y no repetir errores. Guarda: lo que hiciste, lo que aprendiste sobre la app, errores que cometiste, patrones que funcionan, comportamientos que descubriste. MEMORIA-ENLAZADA-01: usa enlaces_a con los slugs de notas relacionadas que ya conozcas (te los devuelve memory_read) para conectar este recuerdo con otros.',
     input_schema: {
       type: 'object',
       properties: {
@@ -3891,7 +3891,8 @@ function buildNexusPrompt(expertName, canal = 'telegram') {
     : ' Estamos en Telegram: sin markdown complejo (evita # y **), usa emojis con moderación.';
   // POOL-GLOSARIO-01 (03/10/2026): el contexto del oficio y el glosario (los mismos que el
   // agente, desde lib.js) van justo detrás de `base`, dentro del bloque cacheado.
-  return expert.modules.flatMap(m => m === 'base' ? [NEXUS_MODULES.base, CONTEXTO_DOMINIO_INSTALADORA] : [NEXUS_MODULES[m]])
+  // POOL-DATOS-FALTANTES-01 (04/10/2026): y la regla de «pregunta antes de suponer» (dos cerebros).
+  return expert.modules.flatMap(m => m === 'base' ? [NEXUS_MODULES.base, CONTEXTO_DOMINIO_INSTALADORA, REGLA_DATOS_OBLIGATORIOS] : [NEXUS_MODULES[m]])
     .filter(Boolean).join('\n\n') + canalNote;
 }
 

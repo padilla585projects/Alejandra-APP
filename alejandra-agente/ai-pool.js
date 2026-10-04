@@ -363,6 +363,29 @@ function _cuerpoChatPool(env, { messages, maxTokens = 512, tools, sinRazonamient
   return { ok: true, body, modeloPedido, conTools };
 }
 
+// ¿Son válidas las tool_calls de una respuesta del pool? Devuelve null si sí, o un código corto
+// del problema (para logs/tests; nunca contenido): 'sin_nombre', 'tool_no_ofrecida',
+// 'argumentos_json_invalido' o 'argumentos_no_objeto'. `toolsOfrecidas` = body.tools (formato
+// OpenAI); sin tools ofrecidas, cualquier tool_call es inválida. arguments vacío ('' o
+// ausente) cuenta como {} (algunos servidores lo mandan así para tools sin parámetros).
+export function validarToolCallsPool(toolCalls, toolsOfrecidas) {
+  if (!Array.isArray(toolCalls) || !toolCalls.length) return null;
+  const nombres = new Set((Array.isArray(toolsOfrecidas) ? toolsOfrecidas : [])
+    .map(t => t && t.function && t.function.name).filter(Boolean));
+  for (const tc of toolCalls) {
+    const f = tc && tc.function;
+    if (!f || typeof f.name !== 'string' || !f.name.trim()) return 'sin_nombre';
+    if (!nombres.has(f.name)) return 'tool_no_ofrecida';
+    let args = f.arguments;
+    if (args === undefined || args === null || (typeof args === 'string' && !args.trim())) continue;
+    if (typeof args === 'string') {
+      try { args = JSON.parse(args); } catch (_) { return 'argumentos_json_invalido'; }
+    }
+    if (!args || typeof args !== 'object' || Array.isArray(args)) return 'argumentos_no_objeto';
+  }
+  return null;
+}
+
 // Chat compatible OpenAI sin métrica (la emite quien lo llama). Sin `modelo` explícito se
 // pide modeloPool(env) (el alias alejandra:1.0 o el override AI_POOL_MODEL).
 async function _poolChatCrudo(env, { messages, maxTokens = 512, tools, timeoutMs = AI_POOL_TIMEOUTS.simple, sinRazonamiento = true, temperature, modelo, json = false } = {}, opts = {}) {
@@ -379,12 +402,23 @@ async function _poolChatCrudo(env, { messages, maxTokens = 512, tools, timeoutMs
     const codigo = _codigoError(data);
     return { ok: false, motivo: AI_POOL_ERRORES_RAPIDOS.has(codigo) ? codigo : 'error_en_cuerpo', codigo, ms: r.ms, modeloPedido, modeloReal };
   }
-  const mensaje = data.choices && data.choices[0] && data.choices[0].message;
+  const eleccion = data.choices && data.choices[0];
+  const mensaje = eleccion && eleccion.message;
+  const finishReason = (eleccion && eleccion.finish_reason) || null;
   const texto = quitarRazonamiento(mensaje && mensaje.content);
-  const toolCalls = mensaje && Array.isArray(mensaje.tool_calls) ? mensaje.tool_calls.filter(tc => tc && tc.function && tc.function.name) : [];
+  // POOL-TOOLS-CONFUSAS-01 (04/10/2026): antes las tool_calls sin nombre se filtraban en
+  // silencio y una llamada a una tool no ofrecida o con arguments que no son JSON llegaba al
+  // agente. Ahora cualquier tool_call mal formada → respaldo con motivo 'tool_call_invalida'.
+  const toolCalls = mensaje && Array.isArray(mensaje.tool_calls) ? mensaje.tool_calls : [];
+  const invalida = validarToolCallsPool(toolCalls, body.tools);
+  if (invalida) {
+    _registrarFallo();
+    return { ok: false, motivo: 'tool_call_invalida', detalle: invalida, finishReason, ms: r.ms, modeloPedido, modeloReal };
+  }
+  // content vacío o solo espacios (o solo <think>) y sin tool_calls → respaldo.
   if (!mensaje || (!texto && !toolCalls.length)) {
     _registrarFallo();
-    return { ok: false, motivo: 'respuesta_vacia', ms: r.ms, modeloPedido, modeloReal };
+    return { ok: false, motivo: 'respuesta_vacia', finishReason, ms: r.ms, modeloPedido, modeloReal };
   }
   // El alias resolvió a un modelo sin tools (p. ej. prisma:1.0) en una petición CON tools y no
   // hay tool_calls: su texto no ha podido consultar nada (riesgo de inventar datos) → respaldo.
@@ -403,7 +437,7 @@ async function _poolChatCrudo(env, { messages, maxTokens = 512, tools, timeoutMs
     modeloPedido,
     modeloReal,
     modeloRegistro: AI_POOL_PREFIJO_MODELO + modeloReal,
-    finishReason: data.choices[0].finish_reason || null,
+    finishReason,
     usage: {
       input_tokens: (data.usage && data.usage.prompt_tokens) || 0,
       output_tokens: (data.usage && data.usage.completion_tokens) || 0

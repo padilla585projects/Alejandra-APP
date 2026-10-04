@@ -9,7 +9,7 @@ import {
   circuitoPoolAbierto, _reiniciarCircuitoPool, metricasPool, _reiniciarMetricasPool,
   prepararConsultaBusqueda, consultaBusquedaHeuristica, consultaNecesitaReescritura,
   validarConsultaReescrita, sinceHeuristico, normalizarNombreModeloPool, AI_POOL_SINCE_VALIDOS,
-  poolLeerDocumento, tipoDocumentoPool, nombreDocumentoPool, AI_POOL_DOCUMENTO_MAX_BYTES
+  poolLeerDocumento, tipoDocumentoPool, nombreDocumentoPool, AI_POOL_DOCUMENTO_MAX_BYTES, validarToolCallsPool
 } from './ai-pool.js';
 import { calcularCosteYProveedor, ETIQUETAS_CLASIFICADOR_INTENCION, SYSTEM_CLASIFICADOR_INTENCION } from './lib.js';
 
@@ -249,6 +249,80 @@ describe('ADR-0028: respuesta mal formada → respaldo', () => {
   it('tolera otras formas de respuesta de búsqueda (array raíz, link/description)', () => {
     expect(normalizarResultadosBusqueda([{ link: 'https://x.es', name: 'X', description: 'd' }]).resultados)
       .toEqual([{ title: 'X', url: 'https://x.es', content: 'd' }]);
+  });
+});
+
+describe('POOL-TOOLS-CONFUSAS-01: respuesta vacía o tool_calls inválidas → respaldo con motivo', () => {
+  const tools = [
+    { type: 'function', function: { name: 'consultar_bd', parameters: { type: 'object', properties: { query: { type: 'string' } } } } },
+    { type: 'function', function: { name: 'listar_tareas_programadas', parameters: { type: 'object', properties: {} } } }
+  ];
+  const conTools = (extra, content = '') => chatOk(content, extra);
+  const llamar = r => poolChat(ENV, { messages: [{ role: 'user', content: 'x' }], tools, uso: 'experto_app' }, { fetch: fetchQueDevuelve(r) });
+
+  it('content vacío o solo espacios y sin tool_calls → respuesta_vacia (con finish_reason), métrica y circuito cerrado tras una', async () => {
+    for (const c of ['', '   \n\t', null]) {
+      _reiniciarCircuitoPool();
+      const r = await llamar(chatOk(c));
+      expect(r).toMatchObject({ ok: false, motivo: 'respuesta_vacia', finishReason: 'stop' });
+    }
+    expect(metricasPool().usos.experto_app).toMatchObject({ respaldo: 3, motivosRespaldo: { respuesta_vacia: 3 } });
+    expect(circuitoPoolAbierto()).toBe(false);
+  });
+
+  it('tool_calls mal formadas, a una tool no ofrecida o con arguments que no son JSON → tool_call_invalida', async () => {
+    const casos = [
+      [{ tool_calls: [{ id: 'a', type: 'function', function: { arguments: '{}' } }] }, 'sin_nombre'],
+      [{ tool_calls: [{ id: 'a', type: 'function' }] }, 'sin_nombre'],
+      [{ tool_calls: [{ id: 'a', type: 'function', function: { name: 'borrar_todo', arguments: '{}' } }] }, 'tool_no_ofrecida'],
+      [{ tool_calls: [{ id: 'a', type: 'function', function: { name: 'consultar_bd', arguments: '{"query": "SELECT' } }] }, 'argumentos_json_invalido'],
+      [{ tool_calls: [{ id: 'a', type: 'function', function: { name: 'consultar_bd', arguments: '["SELECT 1"]' } }] }, 'argumentos_no_objeto'],
+      // una buena y otra mala: toda la respuesta va al respaldo
+      [{ tool_calls: [{ id: 'a', type: 'function', function: { name: 'consultar_bd', arguments: '{"query":"SELECT 1"}' } }, { id: 'b', type: 'function', function: { name: 'inventada', arguments: '{}' } }] }, 'tool_no_ofrecida'],
+    ];
+    for (const [extra, detalle] of casos) {
+      _reiniciarCircuitoPool();
+      const r = await llamar(conTools(extra, 'texto de relleno'));
+      expect(r, detalle).toMatchObject({ ok: false, motivo: 'tool_call_invalida', detalle });
+    }
+    expect(metricasPool().usos.experto_app.motivosRespaldo).toEqual({ tool_call_invalida: casos.length });
+  });
+
+  it('una sola respuesta inválida no abre el circuito; tres seguidas sí (como cualquier fallo)', async () => {
+    const mala = conTools({ tool_calls: [{ id: 'a', type: 'function', function: { name: 'inventada', arguments: '{}' } }] });
+    await llamar(mala);
+    expect(circuitoPoolAbierto()).toBe(false);
+    await llamar(chatOk('ok')); // un éxito reinicia el contador
+    for (let i = 0; i < AI_POOL_CIRCUITO.umbralFallos - 1; i++) await llamar(mala);
+    expect(circuitoPoolAbierto()).toBe(false);
+    await llamar(chatOk(''));
+    expect(circuitoPoolAbierto()).toBe(true);
+  });
+
+  it('tool_calls válidas: arguments como texto JSON, como objeto o vacío (tool sin parámetros) → ok', async () => {
+    for (const args of ['{"query":"SELECT 1"}', { query: 'SELECT 1' }]) {
+      _reiniciarCircuitoPool();
+      const r = await llamar(conTools({ tool_calls: [{ id: 'a', type: 'function', function: { name: 'consultar_bd', arguments: args } }] }));
+      expect(r.ok).toBe(true);
+      expect(r.toolCalls).toHaveLength(1);
+    }
+    for (const args of ['', undefined]) {
+      const r = await llamar(conTools({ tool_calls: [{ id: 'a', type: 'function', function: { name: 'listar_tareas_programadas', arguments: args } }] }));
+      expect(r.ok).toBe(true);
+    }
+  });
+
+  it('validarToolCallsPool: sin tools ofrecidas cualquier llamada es inválida; sin llamadas, null', () => {
+    expect(validarToolCallsPool([], tools)).toBeNull();
+    expect(validarToolCallsPool(undefined, tools)).toBeNull();
+    expect(validarToolCallsPool([{ function: { name: 'consultar_bd', arguments: '{}' } }], undefined)).toBe('tool_no_ofrecida');
+    expect(validarToolCallsPool([{ function: { name: 'consultar_bd', arguments: '{}' } }], tools)).toBeNull();
+  });
+
+  it('el agente cae a su cadena de siempre con cualquier ok:false del pool', () => {
+    const agente = readFileSync(new URL('./worker.js', import.meta.url), 'utf8');
+    const ini = agente.indexOf('async function _intentarPoolChat(');
+    expect(agente.slice(ini, ini + 1500)).toMatch(/const r = await poolChat\([^)]*\);\s*if \(!r\.ok\) return null;/);
   });
 });
 
